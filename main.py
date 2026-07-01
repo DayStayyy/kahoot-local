@@ -144,7 +144,7 @@ async def host_page(request: Request) -> HTMLResponse:
     """
     quizzes = scan_quizzes()
     return templates.TemplateResponse(
-        "host.html", {"request": request, "quizzes": quizzes}
+        request, "host.html", {"quizzes": quizzes}
     )
 
 
@@ -159,7 +159,7 @@ async def player_page(request: Request) -> HTMLResponse:
         Rendered play.html template.
     """
     return templates.TemplateResponse(
-        "play.html", {"request": request}
+        request, "play.html", {}
     )
 
 
