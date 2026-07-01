@@ -14,7 +14,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse
 
 from game import GameSession
-from models import SessionState, load_quiz
+from models import Player, SessionState, load_quiz
 
 QUIZZES_DIR = Path("quizzes")
 
@@ -29,6 +29,7 @@ templates = Jinja2Templates(directory="templates")
 game_session: Optional[GameSession] = None
 host_ws: Optional[WebSocket] = None
 player_connections: Dict[str, WebSocket] = {}
+pending_players: Dict[str, str] = {}  # player_id -> name, before quiz starts
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +228,9 @@ async def handle_start_quiz(filename: str) -> None:
         return
 
     game_session = GameSession(quiz)
+    for pid, pname in list(pending_players.items()):
+        game_session.players[pid] = Player(player_id=pid, name=pname)
+    pending_players.clear()
     game_session.start_question()
     start_question_timer(game_session)
 
@@ -328,6 +332,7 @@ async def player_websocket(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         if player_id is not None:
             player_connections.pop(player_id, None)
+            pending_players.pop(player_id, None)
             if game_session is not None:
                 game_session.remove_player(player_id)
             await broadcast_host(
@@ -340,6 +345,9 @@ async def handle_player_join(
 ) -> str:
     """Register a new player and notify the host.
 
+    Players who join before the quiz starts are stored in pending_players
+    and absorbed into the GameSession when the quiz is launched.
+
     Args:
         websocket: The player's WebSocket.
         name: The chosen display name.
@@ -349,25 +357,18 @@ async def handle_player_join(
     """
     if game_session is not None:
         player = game_session.add_player(name)
-        player_connections[player.player_id] = websocket
-        await send_json(
-            websocket,
-            {"type": "joined", "player_id": player.player_id},
-        )
-        await broadcast_host({
-            "type": "player_joined",
-            "player_id": player.player_id,
-            "name": player.name,
-        })
-        return player.player_id
+        player_id = player.player_id
     else:
         import uuid as _uuid
         player_id = str(_uuid.uuid4())
-        player_connections[player_id] = websocket
-        await send_json(
-            websocket, {"type": "joined", "player_id": player_id}
-        )
-        return player_id
+        pending_players[player_id] = name
+
+    player_connections[player_id] = websocket
+    await send_json(websocket, {"type": "joined", "player_id": player_id})
+    await broadcast_host(
+        {"type": "player_joined", "player_id": player_id, "name": name}
+    )
+    return player_id
 
 
 async def handle_player_answer(
