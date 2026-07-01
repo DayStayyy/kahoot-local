@@ -174,6 +174,14 @@ function handleQuestionStart(msg) {
     `Question ${msg.index + 1} / ${msg.total}`;
   document.getElementById("q-text").textContent = msg.question;
   document.getElementById("q-answer-count").textContent = "0 reponse(s)";
+  const img = document.getElementById("q-image");
+  if (msg.image) {
+    img.src = `/static/${msg.image}`;
+    img.style.display = "block";
+  } else {
+    img.src = "";
+    img.style.display = "none";
+  }
   renderAnswers(msg.answers);
   startTimerUI(msg.time_limit);
   showSection("question");

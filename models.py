@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -32,6 +32,7 @@ class Question(BaseModel):
     question: str
     answers: List[str]
     correct_indices: List[int]
+    image: Optional[str] = None
 
     @field_validator("answers")
     @classmethod

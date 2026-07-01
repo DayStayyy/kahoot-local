@@ -242,6 +242,7 @@ async def handle_start_quiz(filename: str) -> None:
         "question": question.question,
         "answers": question.answers,
         "time_limit": quiz.time_limit,
+        "image": question.image,
     })
     await broadcast_players({
         "type": "question_start",
@@ -269,6 +270,7 @@ async def handle_next_question() -> None:
             "question": question.question,
             "answers": question.answers,
             "time_limit": game_session.quiz.time_limit,
+            "image": question.image,
         })
         await broadcast_players({
             "type": "question_start",
