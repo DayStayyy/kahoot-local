@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import socket
+import uuid
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -35,6 +37,23 @@ pending_players: Dict[str, str] = {}  # player_id -> name, before quiz starts
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def get_local_ips() -> List[str]:
+    """Return all non-loopback IPv4 addresses of this machine.
+
+    Returns:
+        Deduplicated list of local IPv4 address strings.
+    """
+    seen: dict[str, None] = {}
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None):
+            ip = info[4][0]
+            if ":" not in ip and ip != "127.0.0.1":
+                seen[ip] = None
+    except Exception:
+        pass
+    return list(seen)
 
 
 def scan_quizzes() -> list[dict[str, str]]:
@@ -77,13 +96,21 @@ async def broadcast_host(data: Dict[str, Any]) -> None:
 
 
 async def broadcast_players(data: Dict[str, Any]) -> None:
-    """Send a message to all connected player WebSockets.
+    """Send a message to all connected player WebSockets concurrently.
+
+    Serializes once then dispatches to all players in parallel via
+    asyncio.gather to avoid sequential latency with many connections.
 
     Args:
         data: The message payload.
     """
-    for ws in list(player_connections.values()):
-        await send_json(ws, data)
+    if not player_connections:
+        return
+    text = json.dumps(data)
+    await asyncio.gather(
+        *(ws.send_text(text) for ws in list(player_connections.values())),
+        return_exceptions=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +172,10 @@ async def host_page(request: Request) -> HTMLResponse:
     """
     quizzes = scan_quizzes()
     return templates.TemplateResponse(
-        request, "host.html", {"quizzes": quizzes}
+        request, "host.html", {
+            "quizzes": quizzes,
+            "local_ips": get_local_ips(),
+        }
     )
 
 
@@ -287,15 +317,18 @@ async def handle_next_question() -> None:
             key=lambda p: p.score,
             reverse=True,
         )
-        for rank, player in enumerate(players_list, start=1):
-            ws = player_connections.get(player.player_id)
-            if ws:
-                await send_json(ws, {
-                    "type": "finished",
-                    "score": player.score,
-                    "rank": rank,
-                    "total_players": len(players_list),
-                })
+        total = len(players_list)
+        tasks = [
+            send_json(ws, {
+                "type": "finished",
+                "score": player.score,
+                "rank": rank,
+                "total_players": total,
+            })
+            for rank, player in enumerate(players_list, start=1)
+            if (ws := player_connections.get(player.player_id))
+        ]
+        await asyncio.gather(*tasks)
 
 
 # ---------------------------------------------------------------------------
@@ -361,8 +394,7 @@ async def handle_player_join(
         player = game_session.add_player(name)
         player_id = player.player_id
     else:
-        import uuid as _uuid
-        player_id = str(_uuid.uuid4())
+        player_id = str(uuid.uuid4())
         pending_players[player_id] = name
 
     player_connections[player_id] = websocket

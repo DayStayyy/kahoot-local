@@ -13,6 +13,12 @@
     <h1>Kahoot LAN</h1>
     <p id="lobby-player-count">0 joueur(s) connecte(s)</p>
     <ul id="lobby-player-list"></ul>
+    <div id="player-urls">
+      <h3>URL joueurs</h3>
+      {% for ip in local_ips %}
+      <p class="player-url">http://{{ ip }}:8000/play</p>
+      {% endfor %}
+    </div>
     <h2>Choisir un quiz</h2>
     <ul id="quiz-list">
       {% for quiz in quizzes %}

@@ -260,3 +260,30 @@ button:not(:disabled):hover {
   font-weight: bold;
   font-size: 1.1rem;
 }
+
+/* ---------------------------------------------------------------------------
+   Player URLs (lobby)
+--------------------------------------------------------------------------- */
+
+#player-urls {
+  background: #16213e;
+  border-radius: 8px;
+  padding: 12px 20px;
+  width: 100%;
+  max-width: 500px;
+}
+
+#player-urls h3 {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #aaa;
+  margin-bottom: 8px;
+}
+
+.player-url {
+  font-family: monospace;
+  font-size: 1rem;
+  color: #e94560;
+  padding: 4px 0;
+}

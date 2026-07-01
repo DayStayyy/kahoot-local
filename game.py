@@ -34,6 +34,7 @@ class GameSession:
         self.current_question_index: int = 0
         self.question_start_time: Optional[float] = None
         self.timer_task: Optional[asyncio.Task] = None  # type: ignore[type-arg]
+        self._answered_count: int = 0
 
     def add_player(self, name: str) -> Player:
         """Create and register a new player.
@@ -64,6 +65,7 @@ class GameSession:
         """
         self.state = SessionState.QUESTION
         self.question_start_time = time.monotonic()
+        self._answered_count = 0
         for player in self.players.values():
             player.answered_current = False
 
@@ -89,6 +91,7 @@ class GameSession:
             return 0
 
         player.answered_current = True
+        self._answered_count += 1
         question = self.current_question()
 
         if answer_index not in question.correct_indices:
@@ -128,14 +131,12 @@ class GameSession:
         return self.quiz.questions[self.current_question_index]
 
     def answered_count(self) -> int:
-        """Count players who have answered the current question.
+        """Return the number of players who answered the current question.
 
         Returns:
-            Number of players with answered_current == True.
+            Maintained counter incremented in record_answer; O(1).
         """
-        return sum(
-            1 for p in self.players.values() if p.answered_current
-        )
+        return self._answered_count
 
     def get_leaderboard(self) -> List[Dict[str, Any]]:
         """Return players sorted by score descending.
