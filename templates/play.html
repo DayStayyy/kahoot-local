@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kahoot LAN — Joueur</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- JOIN FORM -->
+  <section id="join-form" class="section active">
+    <h1>Kahoot LAN</h1>
+    <form id="form-join">
+      <input
+        id="player-name"
+        type="text"
+        placeholder="Ton pseudo"
+        maxlength="20"
+        autocomplete="off"
+        required
+      >
+      <button type="submit">Rejoindre</button>
+    </form>
+  </section>
+
+  <!-- WAITING -->
+  <section id="waiting" class="section">
+    <p>En attente du debut de la partie...</p>
+  </section>
+
+  <!-- QUESTION -->
+  <section id="question" class="section">
+    <div id="buttons-container"></div>
+    <p id="answer-feedback"></p>
+  </section>
+
+  <!-- INTERMISSION -->
+  <section id="intermission" class="section">
+    <p>La prochaine question arrive...</p>
+  </section>
+
+  <!-- FINISHED -->
+  <section id="finished" class="section">
+    <h2>Partie terminee !</h2>
+    <p id="final-score"></p>
+    <p id="final-rank"></p>
+  </section>
+
+  <script src="/static/play.js"></script>
+</body>
+</html>

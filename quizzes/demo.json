@@ -1,0 +1,21 @@
+{
+  "title": "Quiz de demonstration",
+  "time_limit": 20,
+  "questions": [
+    {
+      "question": "Quelle est la capitale de la France ?",
+      "answers": ["Paris", "Lyon", "Marseille", "Bordeaux"],
+      "correct_indices": [0]
+    },
+    {
+      "question": "Lesquels sont des langages de programmation ?",
+      "answers": ["Python", "HTML", "Rust"],
+      "correct_indices": [0, 2]
+    },
+    {
+      "question": "Combien font 7 fois 8 ?",
+      "answers": ["54", "56", "48", "64"],
+      "correct_indices": [1]
+    }
+  ]
+}

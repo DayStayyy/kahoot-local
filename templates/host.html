@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kahoot LAN — Hote</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <!-- LOBBY -->
+  <section id="lobby" class="section active">
+    <h1>Kahoot LAN</h1>
+    <p id="lobby-player-count">0 joueur(s) connecte(s)</p>
+    <ul id="lobby-player-list"></ul>
+    <h2>Choisir un quiz</h2>
+    <ul id="quiz-list">
+      {% for quiz in quizzes %}
+      <li>
+        <label>
+          <input type="radio" name="quiz" value="{{ quiz.filename }}">
+          {{ quiz.title }}
+        </label>
+      </li>
+      {% endfor %}
+    </ul>
+    <button id="btn-start" disabled>Lancer</button>
+  </section>
+
+  <!-- QUESTION -->
+  <section id="question" class="section">
+    <div id="q-header">
+      <span id="q-index"></span>
+      <div id="q-timer-container">
+        <div id="q-timer-bar"></div>
+      </div>
+      <span id="q-answer-count">0 reponse(s)</span>
+    </div>
+    <h2 id="q-text"></h2>
+    <div id="q-answers">
+      <div class="answer-slot" id="ans-0"></div>
+      <div class="answer-slot" id="ans-1"></div>
+      <div class="answer-slot" id="ans-2"></div>
+      <div class="answer-slot" id="ans-3"></div>
+    </div>
+  </section>
+
+  <!-- INTERMISSION -->
+  <section id="intermission" class="section">
+    <h2>Classement provisoire</h2>
+    <ol id="ranking-list" class="leaderboard"></ol>
+    <button id="btn-next">Question suivante</button>
+  </section>
+
+  <!-- FINISHED -->
+  <section id="finished" class="section">
+    <h2>Classement final</h2>
+    <ol id="final-ranking" class="leaderboard"></ol>
+  </section>
+
+  <script src="/static/host.js"></script>
+</body>
+</html>

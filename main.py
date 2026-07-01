@@ -1,0 +1,395 @@
+"""FastAPI application: HTTP routes, WebSocket endpoints, broadcasting."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.requests import Request
+from starlette.responses import HTMLResponse
+
+from game import GameSession
+from models import SessionState, load_quiz
+
+QUIZZES_DIR = Path("quizzes")
+
+app = FastAPI()
+app.mount("/static", StaticFiles(directory="static"), name="static")
+templates = Jinja2Templates(directory="templates")
+
+# ---------------------------------------------------------------------------
+# Global state (single session, resets on restart)
+# ---------------------------------------------------------------------------
+
+game_session: Optional[GameSession] = None
+host_ws: Optional[WebSocket] = None
+player_connections: Dict[str, WebSocket] = {}
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def scan_quizzes() -> list[dict[str, str]]:
+    """Scan the quizzes directory and return valid quiz descriptors.
+
+    Returns:
+        List of dicts with 'filename' and 'title' for each valid quiz.
+    """
+    result = []
+    for path in sorted(QUIZZES_DIR.glob("*.json")):
+        try:
+            quiz = load_quiz(path)
+            result.append({"filename": path.name, "title": quiz.title})
+        except Exception:
+            pass
+    return result
+
+
+async def send_json(ws: WebSocket, data: Dict[str, Any]) -> None:
+    """Send a JSON message to a WebSocket, ignoring send errors.
+
+    Args:
+        ws: The target WebSocket.
+        data: The message payload.
+    """
+    try:
+        await ws.send_text(json.dumps(data))
+    except Exception:
+        pass
+
+
+async def broadcast_host(data: Dict[str, Any]) -> None:
+    """Send a message to the host WebSocket if connected.
+
+    Args:
+        data: The message payload.
+    """
+    if host_ws is not None:
+        await send_json(host_ws, data)
+
+
+async def broadcast_players(data: Dict[str, Any]) -> None:
+    """Send a message to all connected player WebSockets.
+
+    Args:
+        data: The message payload.
+    """
+    for ws in list(player_connections.values()):
+        await send_json(ws, data)
+
+
+# ---------------------------------------------------------------------------
+# Timer
+# ---------------------------------------------------------------------------
+
+
+async def run_question_timer(
+    session: GameSession, time_limit: int
+) -> None:
+    """Sleep for time_limit seconds then trigger end-of-question.
+
+    Transitions state to INTERMISSION and broadcasts results.
+
+    Args:
+        session: The active GameSession.
+        time_limit: Duration in seconds.
+    """
+    await asyncio.sleep(time_limit)
+    if session.state != SessionState.QUESTION:
+        return
+    session.end_question()
+    question = session.current_question()
+    await broadcast_host({
+        "type": "intermission",
+        "leaderboard": session.get_leaderboard(),
+        "correct_indices": question.correct_indices,
+    })
+    await broadcast_players({"type": "intermission"})
+
+
+def start_question_timer(session: GameSession) -> None:
+    """Cancel any existing timer and start a new one for the question.
+
+    Args:
+        session: The active GameSession.
+    """
+    if session.timer_task and not session.timer_task.done():
+        session.timer_task.cancel()
+    session.timer_task = asyncio.create_task(
+        run_question_timer(session, session.quiz.time_limit)
+    )
+
+
+# ---------------------------------------------------------------------------
+# HTTP routes
+# ---------------------------------------------------------------------------
+
+
+@app.get("/", response_class=HTMLResponse)
+async def host_page(request: Request) -> HTMLResponse:
+    """Render the host page with the list of available quizzes.
+
+    Args:
+        request: The incoming HTTP request.
+
+    Returns:
+        Rendered host.html template.
+    """
+    quizzes = scan_quizzes()
+    return templates.TemplateResponse(
+        "host.html", {"request": request, "quizzes": quizzes}
+    )
+
+
+@app.get("/play", response_class=HTMLResponse)
+async def player_page(request: Request) -> HTMLResponse:
+    """Render the player page.
+
+    Args:
+        request: The incoming HTTP request.
+
+    Returns:
+        Rendered play.html template.
+    """
+    return templates.TemplateResponse(
+        "play.html", {"request": request}
+    )
+
+
+# ---------------------------------------------------------------------------
+# WebSocket — Host
+# ---------------------------------------------------------------------------
+
+
+@app.websocket("/ws/host")
+async def host_websocket(websocket: WebSocket) -> None:
+    """Handle the host WebSocket connection.
+
+    Accepts one host at a time. Sends state snapshot on connect.
+    Processes 'start_quiz' and 'next_question' messages.
+
+    Args:
+        websocket: The connecting WebSocket.
+    """
+    global host_ws
+
+    await websocket.accept()
+    host_ws = websocket
+
+    snapshot: Dict[str, Any] = {
+        "type": "state_snapshot",
+        "state": "LOBBY",
+    }
+    if game_session is not None:
+        snapshot["state"] = game_session.state.value
+        snapshot["quiz_title"] = game_session.quiz.title
+        snapshot["players"] = [
+            {"id": p.player_id, "name": p.name, "score": p.score}
+            for p in game_session.players.values()
+        ]
+    await send_json(websocket, snapshot)
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            msg: Dict[str, Any] = json.loads(raw)
+            msg_type = msg.get("type")
+
+            if msg_type == "start_quiz":
+                await handle_start_quiz(msg.get("filename", ""))
+            elif msg_type == "next_question":
+                await handle_next_question()
+
+    except WebSocketDisconnect:
+        host_ws = None
+
+
+async def handle_start_quiz(filename: str) -> None:
+    """Load a quiz and start the first question.
+
+    Args:
+        filename: Base filename of the quiz JSON in quizzes/.
+    """
+    global game_session
+
+    path = QUIZZES_DIR / filename
+    try:
+        quiz = load_quiz(path)
+    except Exception as exc:
+        await broadcast_host({"type": "error", "message": str(exc)})
+        return
+
+    game_session = GameSession(quiz)
+    game_session.start_question()
+    start_question_timer(game_session)
+
+    question = game_session.current_question()
+    await broadcast_host({
+        "type": "question_start",
+        "index": game_session.current_question_index,
+        "total": len(quiz.questions),
+        "question": question.question,
+        "answers": question.answers,
+        "time_limit": quiz.time_limit,
+    })
+    await broadcast_players({
+        "type": "question_start",
+        "button_count": len(question.answers),
+        "time_limit": quiz.time_limit,
+    })
+
+
+async def handle_next_question() -> None:
+    """Advance the session to the next question or finish."""
+    if game_session is None:
+        return
+    if game_session.state != SessionState.INTERMISSION:
+        return
+
+    has_next = game_session.next_question()
+
+    if has_next:
+        start_question_timer(game_session)
+        question = game_session.current_question()
+        await broadcast_host({
+            "type": "question_start",
+            "index": game_session.current_question_index,
+            "total": len(game_session.quiz.questions),
+            "question": question.question,
+            "answers": question.answers,
+            "time_limit": game_session.quiz.time_limit,
+        })
+        await broadcast_players({
+            "type": "question_start",
+            "button_count": len(question.answers),
+            "time_limit": game_session.quiz.time_limit,
+        })
+    else:
+        leaderboard = game_session.get_leaderboard()
+        await broadcast_host(
+            {"type": "finished", "leaderboard": leaderboard}
+        )
+        players_list = sorted(
+            game_session.players.values(),
+            key=lambda p: p.score,
+            reverse=True,
+        )
+        for rank, player in enumerate(players_list, start=1):
+            ws = player_connections.get(player.player_id)
+            if ws:
+                await send_json(ws, {
+                    "type": "finished",
+                    "score": player.score,
+                    "rank": rank,
+                    "total_players": len(players_list),
+                })
+
+
+# ---------------------------------------------------------------------------
+# WebSocket — Player
+# ---------------------------------------------------------------------------
+
+
+@app.websocket("/ws/player")
+async def player_websocket(websocket: WebSocket) -> None:
+    """Handle a player WebSocket connection.
+
+    Waits for a 'join' message with a name, then processes 'answer'
+    messages. Notifies host on join and disconnect.
+
+    Args:
+        websocket: The connecting WebSocket.
+    """
+    await websocket.accept()
+    player_id: Optional[str] = None
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            msg: Dict[str, Any] = json.loads(raw)
+            msg_type = msg.get("type")
+
+            if msg_type == "join":
+                player_id = await handle_player_join(
+                    websocket, msg.get("name", "Anonyme")
+                )
+            elif msg_type == "answer" and player_id is not None:
+                await handle_player_answer(
+                    player_id, int(msg.get("index", -1))
+                )
+
+    except WebSocketDisconnect:
+        if player_id is not None:
+            player_connections.pop(player_id, None)
+            if game_session is not None:
+                game_session.remove_player(player_id)
+            await broadcast_host(
+                {"type": "player_left", "player_id": player_id}
+            )
+
+
+async def handle_player_join(
+    websocket: WebSocket, name: str
+) -> str:
+    """Register a new player and notify the host.
+
+    Args:
+        websocket: The player's WebSocket.
+        name: The chosen display name.
+
+    Returns:
+        The assigned player_id.
+    """
+    if game_session is not None:
+        player = game_session.add_player(name)
+        player_connections[player.player_id] = websocket
+        await send_json(
+            websocket,
+            {"type": "joined", "player_id": player.player_id},
+        )
+        await broadcast_host({
+            "type": "player_joined",
+            "player_id": player.player_id,
+            "name": player.name,
+        })
+        return player.player_id
+    else:
+        import uuid as _uuid
+        player_id = str(_uuid.uuid4())
+        player_connections[player_id] = websocket
+        await send_json(
+            websocket, {"type": "joined", "player_id": player_id}
+        )
+        return player_id
+
+
+async def handle_player_answer(
+    player_id: str, answer_index: int
+) -> None:
+    """Record a player's answer and update the host.
+
+    Args:
+        player_id: ID of the answering player.
+        answer_index: Zero-based index of the chosen button.
+    """
+    if game_session is None:
+        return
+
+    ws = player_connections.get(player_id)
+    game_session.record_answer(player_id, answer_index)
+
+    if ws:
+        await send_json(ws, {"type": "answer_received"})
+
+    await broadcast_host({
+        "type": "answer_count",
+        "count": game_session.answered_count(),
+        "total_players": len(game_session.players),
+    })
