@@ -5,7 +5,8 @@
     {
       "question": "Quelle est la capitale de la France ?",
       "answers": ["Paris", "Lyon", "Marseille", "Bordeaux"],
-      "correct_indices": [0]
+      "correct_indices": [0],
+      "image": "images/demo/flag.jpg"
     },
     {
       "question": "Lesquels sont des langages de programmation ?",
