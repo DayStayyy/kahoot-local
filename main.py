@@ -139,7 +139,15 @@ async def run_question_timer(
         "leaderboard": session.get_leaderboard(),
         "correct_indices": question.correct_indices,
     })
-    await broadcast_players({"type": "intermission"})
+    tasks = [
+        send_json(ws, {
+            "type": "intermission",
+            "correct": player.answered_correctly,
+        })
+        for pid, player in session.players.items()
+        if (ws := player_connections.get(pid))
+    ]
+    await asyncio.gather(*tasks)
 
 
 def start_question_timer(session: GameSession) -> None:

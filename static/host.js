@@ -10,6 +10,7 @@ let timerInterval = null;
 let timerDuration = 0;
 let timerStart = 0;
 let lastCorrectIndices = [];
+let lastAnswers = [];
 
 function showSection(id) {
   SECTIONS.forEach((s) => {
@@ -81,6 +82,18 @@ function renderAnswers(answers) {
       slot.classList.add("hidden-slot");
     }
   }
+}
+
+function renderCorrectAnswers(answers, correctIndices) {
+  const container = document.getElementById("correct-answers");
+  container.innerHTML = "";
+  correctIndices.forEach((i) => {
+    const slot = document.createElement("div");
+    slot.className = "answer-slot";
+    slot.textContent = `${SHAPE_LABELS[i]}  ${answers[i]}`;
+    slot.style.background = ANSWER_COLORS[i];
+    container.appendChild(slot);
+  });
 }
 
 function highlightCorrect(correctIndices) {
@@ -182,6 +195,7 @@ function handleQuestionStart(msg) {
     img.src = "";
     img.style.display = "none";
   }
+  lastAnswers = msg.answers;
   renderAnswers(msg.answers);
   startTimerUI(msg.time_limit);
   showSection("question");
@@ -191,6 +205,7 @@ function handleIntermission(msg) {
   stopTimerUI();
   lastCorrectIndices = msg.correct_indices;
   highlightCorrect(msg.correct_indices);
+  renderCorrectAnswers(lastAnswers, msg.correct_indices);
   renderLeaderboard("ranking-list", msg.leaderboard);
   showSection("intermission");
 }

@@ -63,6 +63,7 @@ function handleMessage(msg) {
       break;
 
     case "intermission":
+      showIntermissionResult(msg.correct);
       showSection("intermission");
       break;
 
@@ -73,6 +74,17 @@ function handleMessage(msg) {
         `Classement : ${msg.rank} / ${msg.total_players}`;
       showSection("finished");
       break;
+  }
+}
+
+function showIntermissionResult(correct) {
+  const el = document.getElementById("answer-result");
+  if (correct) {
+    el.textContent = "Bonne reponse";
+    el.className = "result-correct";
+  } else {
+    el.textContent = "Mauvaise reponse";
+    el.className = "result-wrong";
   }
 }
 

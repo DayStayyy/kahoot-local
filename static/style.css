@@ -176,6 +176,38 @@ button:not(:disabled):hover {
   max-width: 700px;
 }
 
+#answer-result {
+  font-size: 2rem;
+  font-weight: bold;
+}
+
+#answer-result.result-correct {
+  color: #26890C;
+}
+
+#answer-result.result-wrong {
+  color: #E21B3C;
+}
+
+#correct-answers-title {
+  margin-bottom: 8px;
+}
+
+#correct-answers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 700px;
+  margin-bottom: 24px;
+}
+
+#correct-answers .answer-slot {
+  flex: 1 1 auto;
+  min-width: 200px;
+}
+
 .answer-slot {
   padding: 20px 12px;
   border-radius: 8px;

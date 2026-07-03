@@ -127,12 +127,15 @@ class Player:
         name: Display name chosen by the player.
         score: Accumulated points across all questions.
         answered_current: True if the player answered the current question.
+        answered_correctly: True if the player's answer to the current
+            question was correct.
     """
 
     player_id: str
     name: str
     score: int = 0
     answered_current: bool = False
+    answered_correctly: bool = False
 
 
 def load_quiz(path: Path) -> Quiz:

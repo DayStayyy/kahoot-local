@@ -68,6 +68,7 @@ class GameSession:
         self._answered_count = 0
         for player in self.players.values():
             player.answered_current = False
+            player.answered_correctly = False
 
     def record_answer(
         self, player_id: str, answer_index: int
@@ -97,6 +98,7 @@ class GameSession:
         if answer_index not in question.correct_indices:
             return 0
 
+        player.answered_correctly = True
         elapsed = time.monotonic() - (self.question_start_time or 0)
         time_limit = self.quiz.time_limit
         points = round(1000 * (1 - (elapsed / time_limit) / 2))

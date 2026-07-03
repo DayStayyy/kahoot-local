@@ -43,7 +43,7 @@
       <span id="q-answer-count">0 reponse(s)</span>
     </div>
     <h2 id="q-text"></h2>
-    <img id="q-image" src="" alt="" style="display:none; max-height:260px; max-width:100%; border-radius:8px; object-fit:contain;">
+    <img id="q-image" src="" alt="" style="display:none; height:auto; max-height:min(55vh, 500px); max-width:100%; border-radius:8px; object-fit:contain;">
     <div id="q-answers">
       <div class="answer-slot" id="ans-0"></div>
       <div class="answer-slot" id="ans-1"></div>
@@ -54,6 +54,8 @@
 
   <!-- INTERMISSION -->
   <section id="intermission" class="section">
+    <h3 id="correct-answers-title">Bonne(s) reponse(s)</h3>
+    <div id="correct-answers"></div>
     <h2>Classement provisoire</h2>
     <ol id="ranking-list" class="leaderboard"></ol>
     <button id="btn-next">Question suivante</button>
